@@ -1,14 +1,17 @@
+// Use a different name (supabaseClient) to avoid clashing with the library's global name
 const SUPABASE_URL = 'https://oizwspsegossbhwrzuxw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pendzcHNlZ29zc2Jod3J6dXh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQ4NzgsImV4cCI6MjA5Mjc5MDg3OH0.XDcE9omc-5piEpmn3fnZjYhUcBkOnHK4cPSFrP7f_oA';
-const supabase = lib.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let userKey = null; // This will hold the derived encryption key in memory only
+// The CDN library provides the 'supabase' object; we use it to create our client
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let userKey = null;
 
 // --- ENCRYPTION LOGIC ---
 
 async function deriveKey(password, username) {
     const encoder = new TextEncoder();
-    const salt = encoder.encode(username); // Use username as salt for cross-device consistency
+    const salt = encoder.encode(username); 
     const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
     
     return await crypto.subtle.deriveKey(
@@ -43,15 +46,14 @@ async function decryptData(ciphertext, iv, key) {
 async function handleAuth(type) {
     const user = document.getElementById('username').value;
     const pass = document.getElementById('password').value;
-    const email = `${user}@internal.app`; // Dummy email for Supabase
+    const email = `${user}@internal.app`; 
 
     const { data, error } = type === 'signup' 
-        ? await supabase.auth.signUp({ email, password: pass })
-        : await supabase.auth.signInWithPassword({ email, password: pass });
+        ? await supabaseClient.auth.signUp({ email, password: pass })
+        : await supabaseClient.auth.signInWithPassword({ email, password: pass });
 
     if (error) return alert(error.message);
     
-    // Generate key from password immediately on login/signup
     userKey = await deriveKey(pass, user);
     showApp(user);
     loadNotes();
@@ -68,16 +70,18 @@ function showApp(username) {
 async function saveNote() {
     const title = document.getElementById('note-title').value;
     const content = document.getElementById('note-content').value;
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
+
+    if (!userKey) return alert("Encryption key missing. Please log in again.");
 
     const encryptedTitle = await encryptData(title, userKey);
     const encryptedContent = await encryptData(content, userKey);
 
-    const { error } = await supabase.from('notes').insert([{
+    const { error } = await supabaseClient.from('notes').insert([{
         user_id: user.id,
         title: encryptedTitle.ciphertext,
         content: encryptedContent.ciphertext,
-        iv: encryptedContent.iv // For simplicity, we use one IV for the session/content
+        iv: encryptedContent.iv 
     }]);
 
     if (error) alert(error.message);
@@ -89,7 +93,7 @@ async function saveNote() {
 }
 
 async function loadNotes() {
-    const { data, error } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabaseClient.from('notes').select('*').order('created_at', { ascending: false });
     if (error) return;
 
     const list = document.getElementById('notes-list');
@@ -113,11 +117,11 @@ async function loadNotes() {
 }
 
 async function deleteNote(id) {
-    await supabase.from('notes').delete().eq('id', id);
+    await supabaseClient.from('notes').delete().eq('id', id);
     loadNotes();
 }
 
 function logout() {
-    supabase.auth.signOut();
+    supabaseClient.auth.signOut();
     location.reload();
 }

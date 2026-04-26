@@ -11,31 +11,35 @@
     <div id="auth-container">
         <h1>CryptoNotes</h1>
         <p>Anonymous End-to-End Encrypted Notes</p>
-        <input type="text" id="username" placeholder="Username">
-        <input type="password" id="password" placeholder="Password">
-        <div class="btn-group">
-            <button onclick="handleAuth('signup')">Sign Up</button>
-            <button onclick="handleAuth('login')">Log In</button>
+        
+        <div class="auth-form">
+            <input type="text" id="username" placeholder="Username" autocomplete="username">
+            <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+            <div class="btn-group">
+                <button type="button" onclick="handleAuth('signup')">Sign Up</button>
+                <button type="button" onclick="handleAuth('login')">Log In</button>
+            </div>
         </div>
     </div>
 
     <div id="app-container" style="display: none;">
         <header>
-            <span id="user-display"></span>
-            <button onclick="logout()">Logout</button>
+            <strong id="user-display"></strong>
+            <button onclick="logout()" class="btn-secondary">Logout</button>
         </header>
         
         <section id="note-editor">
+            <h3>Create New Note</h3>
             <input type="text" id="note-title" placeholder="Note Title">
-            <textarea id="note-content" placeholder="Write your encrypted note..."></textarea>
-            <button onclick="saveNote()">Save Note</button>
+            <textarea id="note-content" rows="5" placeholder="Write your encrypted note..."></textarea>
+            <button onclick="saveNote()">Save Encrypted Note</button>
         </section>
 
         <hr>
-        <h2>Your Notes</h2>
+        <h2>Your Private Notes</h2>
         <div id="notes-list"></div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js" defer></script>
 </body>
 </html>
