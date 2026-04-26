@@ -92,20 +92,18 @@ function showApp(username) {
     document.getElementById('user-display').innerText = `Logged in as: ${username}`;
 }
 
-// --- NOTE OPERATIONS ---
-
+// --- UPDATED SAVE FUNCTION ---
 async function saveNote() {
     const title = document.getElementById('note-title').value;
     const content = document.getElementById('note-content').value;
-
-    // A simple check to see if the key exists
-    if (!userKey) {
-        alert("Your encryption key is missing! Please log out and log back in.");
-        return;
-    }
+    
+    if (!userKey) return alert("Key missing! Log in again.");
+    if (!title || !content) return alert("Fill in both fields.");
 
     const { data: { user } } = await supabaseClient.auth.getUser();
 
+    // Encrypt both using the same function
+    // Note: encryptData returns { ciphertext, iv }
     const encryptedTitle = await encryptData(title, userKey);
     const encryptedContent = await encryptData(content, userKey);
 
@@ -113,19 +111,18 @@ async function saveNote() {
         user_id: user.id,
         title: encryptedTitle.ciphertext,
         content: encryptedContent.ciphertext,
-        iv: encryptedContent.iv 
+        iv: encryptedContent.iv // We store the content's IV to use for both
     }]);
 
-    if (error) {
-        alert(error.message);
-    } else {
+    if (error) alert(error.message);
+    else {
         document.getElementById('note-title').value = '';
         document.getElementById('note-content').value = '';
-        // Wait a tiny bit for the database to breathe
-        setTimeout(loadNotes, 500); 
+        setTimeout(loadNotes, 500);
     }
 }
 
+// --- UPDATED LOAD FUNCTION ---
 async function loadNotes() {
     const { data, error } = await supabaseClient.from('notes').select('*').order('created_at', { ascending: false });
     if (error) return;
@@ -135,6 +132,8 @@ async function loadNotes() {
 
     for (const note of data) {
         try {
+            // CRITICAL: We must use the exact same IV stored in the DB row
+            // We use note.iv for both because we saved it that way above
             const decTitle = await decryptData(note.title, note.iv, userKey);
             const decContent = await decryptData(note.content, note.iv, userKey);
             
@@ -145,11 +144,11 @@ async function loadNotes() {
                     <button onclick="deleteNote('${note.id}')">Delete</button>
                 </div>`;
         } catch (e) {
-            list.innerHTML += `<div class="note-card"><p>[Decryption Error: Wrong Key]</p></div>`;
+            console.error("Decryption failed for note:", note.id, e);
+            list.innerHTML += `<div class="note-card"><p style="color:red;">[Decryption Error: Data possibly corrupted or wrong key]</p></div>`;
         }
     }
 }
-
 async function deleteNote(id) {
     await supabaseClient.from('notes').delete().eq('id', id);
     loadNotes();
