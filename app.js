@@ -1,8 +1,5 @@
-// Use a different name (supabaseClient) to avoid clashing with the library's global name
 const SUPABASE_URL = 'https://oizwspsegossbhwrzuxw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9pendzcHNlZ29zc2Jod3J6dXh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTQ4NzgsImV4cCI6MjA5Mjc5MDg3OH0.XDcE9omc-5piEpmn3fnZjYhUcBkOnHK4cPSFrP7f_oA';
-
-// The CDN library provides the 'supabase' object; we use it to create our client
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let userKey = null;
@@ -29,31 +26,31 @@ async function deriveKey(password, username) {
     );
 }
 
-// --- UPDATED BULLETPROOF ENCRYPTION ---
+// --- BULLETPROOF ENCRYPTION (NO CORRUPTION) ---
 
 async function encryptData(text, key) {
     const encoder = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encodedText = encoder.encode(text);
-
     const encrypted = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: iv },
         key,
-        encodedText
+        encoder.encode(text)
     );
 
-    // Convert to Base64 safely
-    const ciphertext = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
-    const ivText = btoa(String.fromCharCode(...iv));
+    // Convert binary to Hex string (much safer than Base64)
+    const ciphertext = Array.from(new Uint8Array(encrypted))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+    const ivText = Array.from(iv)
+        .map(b => b.toString(16).padStart(2, '0')).join('');
 
     return { ciphertext, iv: ivText };
 }
 
 async function decryptData(ciphertext, iv, key) {
     try {
-        // Convert from Base64 back to Uint8Array
-        const encryptedData = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
-        const ivData = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+        // Convert Hex string back to Uint8Array
+        const encryptedData = new Uint8Array(ciphertext.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        const ivData = new Uint8Array(iv.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 
         const decrypted = await crypto.subtle.decrypt(
             { name: "AES-GCM", iv: ivData },
@@ -63,7 +60,7 @@ async function decryptData(ciphertext, iv, key) {
 
         return new TextDecoder().decode(decrypted);
     } catch (e) {
-        console.error("Decryption failed:", e);
+        console.error("Internal Decrypt Error:", e);
         throw new Error("Decryption Error");
     }
 }
