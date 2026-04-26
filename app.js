@@ -89,63 +89,66 @@ function showApp(username) {
     document.getElementById('user-display').innerText = `Logged in as: ${username}`;
 }
 
-// --- UPDATED SAVE FUNCTION ---
+// --- SIMPLIFIED SAVE (Let's get this working first!) ---
 async function saveNote() {
-    const title = document.getElementById('note-title').value;
-    const content = document.getElementById('note-content').value;
+    const titleInput = document.getElementById('note-title');
+    const contentInput = document.getElementById('note-content');
     
-    if (!userKey) return alert("Key missing! Log in again.");
-    if (!title || !content) return alert("Fill in both fields.");
+    if (!userKey) return alert("Encryption key missing. Please logout and login again.");
+    if (!titleInput.value || !contentInput.value) return alert("Please fill in everything.");
 
     const { data: { user } } = await supabaseClient.auth.getUser();
 
-    // Encrypt both using the same function
-    // Note: encryptData returns { ciphertext, iv }
-    const encryptedTitle = await encryptData(title, userKey);
-    const encryptedContent = await encryptData(content, userKey);
+    // Only encrypt the CONTENT for now to eliminate complexity
+    const encryptedData = await encryptData(contentInput.value, userKey);
 
     const { error } = await supabaseClient.from('notes').insert([{
         user_id: user.id,
-        title: encryptedTitle.ciphertext,
-        content: encryptedContent.ciphertext,
-        iv: encryptedContent.iv // We store the content's IV to use for both
+        title: titleInput.value, // Plain text title for testing
+        content: encryptedData.ciphertext,
+        iv: encryptedData.iv
     }]);
 
-    if (error) alert(error.message);
-    else {
-        document.getElementById('note-title').value = '';
-        document.getElementById('note-content').value = '';
-        setTimeout(loadNotes, 500);
+    if (error) {
+        alert(error.message);
+    } else {
+        titleInput.value = '';
+        contentInput.value = '';
+        // Wait 1 second to ensure Supabase has indexed the new row
+        setTimeout(loadNotes, 1000);
     }
 }
 
-// --- UPDATED LOAD FUNCTION ---
+// --- SIMPLIFIED LOAD ---
 async function loadNotes() {
     const { data, error } = await supabaseClient.from('notes').select('*').order('created_at', { ascending: false });
-    if (error) return;
+    if (error) return console.error("Fetch error:", error);
 
     const list = document.getElementById('notes-list');
     list.innerHTML = '';
 
     for (const note of data) {
         try {
-            // CRITICAL: We must use the exact same IV stored in the DB row
-            // We use note.iv for both because we saved it that way above
-            const decTitle = await decryptData(note.title, note.iv, userKey);
+            // Decrypt ONLY the content
             const decContent = await decryptData(note.content, note.iv, userKey);
             
             list.innerHTML += `
                 <div class="note-card">
-                    <h3>${decTitle}</h3>
-                    <p>${decContent}</p>
+                    <h3>${note.title}</h3> <p>${decContent}</p>
                     <button onclick="deleteNote('${note.id}')">Delete</button>
                 </div>`;
         } catch (e) {
-            console.error("Decryption failed for note:", note.id, e);
-            list.innerHTML += `<div class="note-card"><p style="color:red;">[Decryption Error: Data possibly corrupted or wrong key]</p></div>`;
+            console.error("Failed to decrypt note:", note.id, e);
+            list.innerHTML += `
+                <div class="note-card" style="border-color: red;">
+                    <h3>${note.title}</h3>
+                    <p style="color: red;">[Decryption Error: Wrong password or corrupted data]</p>
+                    <button onclick="deleteNote('${note.id}')">Delete</button>
+                </div>`;
         }
     }
 }
+
 async function deleteNote(id) {
     await supabaseClient.from('notes').delete().eq('id', id);
     loadNotes();
