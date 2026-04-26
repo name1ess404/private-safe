@@ -70,9 +70,14 @@ function showApp(username) {
 async function saveNote() {
     const title = document.getElementById('note-title').value;
     const content = document.getElementById('note-content').value;
-    const { data: { user } } = await supabaseClient.auth.getUser();
 
-    if (!userKey) return alert("Encryption key missing. Please log in again.");
+    // A simple check to see if the key exists
+    if (!userKey) {
+        alert("Your encryption key is missing! Please log out and log back in.");
+        return;
+    }
+
+    const { data: { user } } = await supabaseClient.auth.getUser();
 
     const encryptedTitle = await encryptData(title, userKey);
     const encryptedContent = await encryptData(content, userKey);
@@ -84,11 +89,13 @@ async function saveNote() {
         iv: encryptedContent.iv 
     }]);
 
-    if (error) alert(error.message);
-    else {
+    if (error) {
+        alert(error.message);
+    } else {
         document.getElementById('note-title').value = '';
         document.getElementById('note-content').value = '';
-        loadNotes();
+        // Wait a tiny bit for the database to breathe
+        setTimeout(loadNotes, 500); 
     }
 }
 
