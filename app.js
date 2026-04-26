@@ -23,22 +23,43 @@ async function deriveKey(password, username) {
     );
 }
 
+// --- UPDATED BULLETPROOF ENCRYPTION ---
+
 async function encryptData(text, key) {
     const encoder = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(text));
-    return {
-        ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-        iv: btoa(String.fromCharCode(...iv))
-    };
+    const encodedText = encoder.encode(text);
+
+    const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        encodedText
+    );
+
+    // Convert to Base64 safely
+    const ciphertext = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const ivText = btoa(String.fromCharCode(...iv));
+
+    return { ciphertext, iv: ivText };
 }
 
 async function decryptData(ciphertext, iv, key) {
-    const decoder = new TextDecoder();
-    const encryptedData = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
-    const ivData = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivData }, key, encryptedData);
-    return decoder.decode(decrypted);
+    try {
+        // Convert from Base64 back to Uint8Array
+        const encryptedData = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+        const ivData = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+
+        const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: ivData },
+            key,
+            encryptedData
+        );
+
+        return new TextDecoder().decode(decrypted);
+    } catch (e) {
+        console.error("Decryption failed:", e);
+        throw new Error("Decryption Error");
+    }
 }
 
 // --- AUTHENTICATION ---
