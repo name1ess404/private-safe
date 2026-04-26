@@ -11,8 +11,14 @@ let userKey = null;
 
 async function deriveKey(password, username) {
     const encoder = new TextEncoder();
-    const salt = encoder.encode(username); 
-    const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
+    const salt = encoder.encode(username.trim().toLowerCase()); // Normalize username
+    const baseKey = await crypto.subtle.importKey(
+        "raw", 
+        encoder.encode(password), 
+        "PBKDF2", 
+        false, 
+        ["deriveKey"]
+    );
     
     return await crypto.subtle.deriveKey(
         { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
