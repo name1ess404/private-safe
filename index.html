@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoNotes - E2EE</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="auth-container">
+        <h1>CryptoNotes</h1>
+        <p>Anonymous End-to-End Encrypted Notes</p>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <div class="btn-group">
+            <button onclick="handleAuth('signup')">Sign Up</button>
+            <button onclick="handleAuth('login')">Log In</button>
+        </div>
+    </div>
+
+    <div id="app-container" style="display: none;">
+        <header>
+            <span id="user-display"></span>
+            <button onclick="logout()">Logout</button>
+        </header>
+        
+        <section id="note-editor">
+            <input type="text" id="note-title" placeholder="Note Title">
+            <textarea id="note-content" placeholder="Write your encrypted note..."></textarea>
+            <button onclick="saveNote()">Save Note</button>
+        </section>
+
+        <hr>
+        <h2>Your Notes</h2>
+        <div id="notes-list"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
