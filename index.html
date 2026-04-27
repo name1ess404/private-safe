@@ -15,6 +15,19 @@
         <div class="auth-form">
             <input type="text" id="username" placeholder="Username" autocomplete="username">
             <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+            
+            <div class="persistence-options">
+                <label>
+                    <input type="checkbox" id="remember-me"> Remember Me
+                </label>
+                <select id="duration">
+                    <option value="session">Until Refresh</option>
+                    <option value="1">1 Hour</option>
+                    <option value="24">24 Hours</option>
+                    <option value="forever">Forever</option>
+                </select>
+            </div>
+
             <div class="btn-group">
                 <button type="button" onclick="handleAuth('signup')">Sign Up</button>
                 <button type="button" onclick="handleAuth('login')">Log In</button>

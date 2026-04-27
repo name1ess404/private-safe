@@ -1,7 +1,29 @@
-body { font-family: sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 20px; }
-#auth-container, #app-container { width: 100%; max-width: 400px; }
-input, textarea { width: 100%; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #333; background: #222; color: white; box-sizing: border-box; }
-button { padding: 10px 20px; cursor: pointer; background: #3d5afe; color: white; border: none; border-radius: 4px; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 20px; }
+#auth-container, #app-container { width: 100%; max-width: 500px; }
+
+input, textarea, select { 
+    width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; 
+    border: 1px solid #333; background: #1e1e1e; color: white; box-sizing: border-box; 
+}
+
+button { 
+    padding: 10px 20px; cursor: pointer; background: #3d5afe; 
+    color: white; border: none; border-radius: 6px; font-weight: bold; 
+}
 button:hover { background: #536dfe; }
-.note-card { background: #1e1e1e; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #3d5afe; }
-.note-card h3 { margin-top: 0; }
+.btn-secondary { background: #444; margin-left: 10px; }
+
+.persistence-options {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 10px 0; font-size: 0.9rem; color: #bbb;
+}
+.persistence-options select { width: auto; padding: 5px; }
+
+.note-card { 
+    background: #1e1e1e; padding: 15px; margin-bottom: 15px; 
+    border-radius: 8px; border-left: 4px solid #3d5afe; 
+}
+.note-card h3 { margin: 0 0 10px 0; color: #3d5afe; }
+.note-card p { white-space: pre-wrap; word-break: break-word; color: #ddd; }
+
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }

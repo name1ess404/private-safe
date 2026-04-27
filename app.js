@@ -4,18 +4,12 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let userKey = null;
 
-// --- ENCRYPTION LOGIC ---
+// --- 1. CRYPTO UTILITIES ---
 
 async function deriveKey(password, username) {
     const encoder = new TextEncoder();
-    const salt = encoder.encode(username.trim().toLowerCase()); // Normalize username
-    const baseKey = await crypto.subtle.importKey(
-        "raw", 
-        encoder.encode(password), 
-        "PBKDF2", 
-        false, 
-        ["deriveKey"]
-    );
+    const salt = encoder.encode(username.trim().toLowerCase());
+    const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
     
     return await crypto.subtle.deriveKey(
         { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
@@ -26,58 +20,65 @@ async function deriveKey(password, username) {
     );
 }
 
-// --- BULLETPROOF ENCRYPTION (NO CORRUPTION) ---
-
 async function encryptData(text, key) {
     const encoder = new TextEncoder();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        key,
-        encoder.encode(text)
-    );
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(text));
 
-    // Convert binary to Hex string (much safer than Base64)
-    const ciphertext = Array.from(new Uint8Array(encrypted))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-    const ivText = Array.from(iv)
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-
-    return { ciphertext, iv: ivText };
+    const ciphertext = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+    return { ciphertext, iv: ivHex };
 }
 
-async function decryptData(ciphertext, iv, key) {
+async function decryptData(ciphertext, ivHex, key) {
     try {
-        // Convert Hex string back to Uint8Array
         const encryptedData = new Uint8Array(ciphertext.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        const ivData = new Uint8Array(iv.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-
-        const decrypted = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: ivData },
-            key,
-            encryptedData
-        );
-
+        const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encryptedData);
         return new TextDecoder().decode(decrypted);
     } catch (e) {
-        console.error("Internal Decrypt Error:", e);
-        throw new Error("Decryption Error");
+        throw new Error("Decryption failed");
     }
 }
 
-// --- AUTHENTICATION ---
+// --- 2. PERSISTENCE LOGIC ---
+
+async function saveSession(user, pass, duration) {
+    if (duration === 'session') return;
+    const expiry = duration === 'forever' ? null : Date.now() + (parseInt(duration) * 60 * 60 * 1000);
+    localStorage.setItem('crypto_session', JSON.stringify({ user, pass, expiry }));
+}
+
+async function checkAutoLogin() {
+    const saved = localStorage.getItem('crypto_session');
+    if (!saved) return;
+    const session = JSON.parse(saved);
+    if (session.expiry && Date.now() > session.expiry) {
+        localStorage.removeItem('crypto_session');
+        return;
+    }
+    document.getElementById('username').value = session.user;
+    document.getElementById('password').value = session.pass;
+    handleAuth('login');
+}
+
+// --- 3. CORE FUNCTIONS ---
 
 async function handleAuth(type) {
     const user = document.getElementById('username').value;
     const pass = document.getElementById('password').value;
-    const email = `${user}@internal.app`; 
+    const rememberMe = document.getElementById('remember-me').checked;
+    const duration = document.getElementById('duration').value;
+
+    if (!user || !pass) return alert("Enter credentials");
 
     const { data, error } = type === 'signup' 
-        ? await supabaseClient.auth.signUp({ email, password: pass })
-        : await supabaseClient.auth.signInWithPassword({ email, password: pass });
+        ? await supabaseClient.auth.signUp({ email: `${user}@internal.app`, password: pass })
+        : await supabaseClient.auth.signInWithPassword({ email: `${user}@internal.app`, password: pass });
 
     if (error) return alert(error.message);
-    
+
+    if (rememberMe) await saveSession(user, pass, duration);
     userKey = await deriveKey(pass, user);
     showApp(user);
     loadNotes();
@@ -86,70 +87,43 @@ async function handleAuth(type) {
 function showApp(username) {
     document.getElementById('auth-container').style.display = 'none';
     document.getElementById('app-container').style.display = 'block';
-    document.getElementById('user-display').innerText = `Logged in as: ${username}`;
+    document.getElementById('user-display').innerText = `User: ${username}`;
 }
 
-// --- FINAL ENCRYPTED SAVE ---
 async function saveNote() {
-    const titleInput = document.getElementById('note-title');
-    const contentInput = document.getElementById('note-content');
-    
-    if (!userKey) return alert("Key missing! Please login again.");
-    if (!titleInput.value || !contentInput.value) return alert("Fill in both fields.");
+    const tInput = document.getElementById('note-title');
+    const cInput = document.getElementById('note-content');
+    if (!userKey || !tInput.value || !cInput.value) return alert("Fill all fields");
 
     const { data: { user } } = await supabaseClient.auth.getUser();
+    const tEnc = await encryptData(tInput.value, userKey);
+    const cEnc = await encryptData(cInput.value, userKey);
 
-    // We encrypt Title and Content separately with their own unique IVs
-    const titleEnc = await encryptData(titleInput.value, userKey);
-    const contentEnc = await encryptData(contentInput.value, userKey);
-
-    // We store the Title's IV in the 'title' field as a prefix, or use a new column.
-    // For simplicity, let's store them in the existing columns:
     const { error } = await supabaseClient.from('notes').insert([{
         user_id: user.id,
-        title: titleEnc.ciphertext + ":" + titleEnc.iv, // Format: ciphertext:iv
-        content: contentEnc.ciphertext,
-        iv: contentEnc.iv // This IV is specifically for the content
+        title: tEnc.ciphertext + ":" + tEnc.iv,
+        content: cEnc.ciphertext,
+        iv: cEnc.iv
     }]);
 
     if (error) alert(error.message);
-    else {
-        titleInput.value = '';
-        contentInput.value = '';
-        setTimeout(loadNotes, 500);
-    }
+    else { tInput.value = ''; cInput.value = ''; setTimeout(loadNotes, 500); }
 }
 
-// --- FINAL ENCRYPTED LOAD ---
 async function loadNotes() {
     const { data, error } = await supabaseClient.from('notes').select('*').order('created_at', { ascending: false });
     if (error) return;
-
     const list = document.getElementById('notes-list');
     list.innerHTML = '';
 
     for (const note of data) {
         try {
-            // 1. Decrypt Title (split the ciphertext from the IV we attached)
-            const [titleCipher, titleIv] = note.title.split(':');
-            const decTitle = await decryptData(titleCipher, titleIv, userKey);
-
-            // 2. Decrypt Content
+            const [tCipher, tIv] = note.title.split(':');
+            const decTitle = await decryptData(tCipher, tIv, userKey);
             const decContent = await decryptData(note.content, note.iv, userKey);
-            
-            list.innerHTML += `
-                <div class="note-card">
-                    <h3>${decTitle}</h3>
-                    <p>${decContent}</p>
-                    <button onclick="deleteNote('${note.id}')">Delete</button>
-                </div>`;
+            list.innerHTML += `<div class="note-card"><h3>${decTitle}</h3><p>${decContent}</p><button onclick="deleteNote('${note.id}')">Delete</button></div>`;
         } catch (e) {
-            // This catches those old "broken" notes
-            list.innerHTML += `
-                <div class="note-card" style="opacity:0.5">
-                    <h3>[Old/Corrupted Note]</h3>
-                    <button onclick="deleteNote('${note.id}')">Delete Old Note</button>
-                </div>`;
+            list.innerHTML += `<div class="note-card" style="opacity:0.5"><h3>[Encrypted/Old Note]</h3><button onclick="deleteNote('${note.id}')">Delete</button></div>`;
         }
     }
 }
@@ -160,6 +134,9 @@ async function deleteNote(id) {
 }
 
 function logout() {
+    localStorage.removeItem('crypto_session');
     supabaseClient.auth.signOut();
     location.reload();
 }
+
+window.onload = checkAutoLogin;
